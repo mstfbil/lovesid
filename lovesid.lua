@@ -1,3 +1,7 @@
+-- lovesid.lua
+-- Copyright (c) 2026 Mustafa Bildirici @mstfbil (voltie_dev)
+-- Licensed under the MIT License
+
 local bit          = require("bit")
 
 local PAL_CLK      = 985248
