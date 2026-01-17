@@ -7,7 +7,7 @@ local bit          = require("bit")
 local PAL_CLK      = 985248
 local NTSC_CLK     = 1022727
 local SAMPLE_RATE  = 44100
-local BUFFER_COUNT = 8
+local BUFFER_COUNT = 2
 local BUFFER_SIZE  = 1024
 local ADSR_TABLE   = {
     attack  = { 0.002, 0.008, 0.016, 0.024, 0.038, 0.056, 0.068, 0.080, 0.100, 0.250, 0.500, 0.800, 1.000, 3.000, 5.000, 8.000 },
@@ -179,15 +179,16 @@ local function updateEnvelope(channel)
 end
 
 local function processFilter(input, lp, bp, hp, resonance)
-    resonance = resonance or 0
+    local cutoff = getFilterCutoff()
+    local f = (cutoff / 2047) * 1.2
+
+    if f > 1.0 then f = 1.0 end
+
     local q = 1.0 - (resonance / 15)
-    local cutoff = getFilterCutoff() / 2047
 
-    local f = cutoff * 0.4
-
-    local high = input - _filterState.band * q - _filterState.low
-    _filterState.band = _filterState.band + f * high
-    _filterState.low = _filterState.low + f * _filterState.band
+    local high = input - _filterState.low - (_filterState.band * q)
+    _filterState.band = _filterState.band + (f * high)
+    _filterState.low = _filterState.low + (f * _filterState.band)
 
     local output = 0
     if lp then output = output + _filterState.low end
