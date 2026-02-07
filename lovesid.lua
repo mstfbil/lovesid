@@ -43,7 +43,7 @@ local lovesid      = setmetatable({}, {
 lovesid.source     = love.audio.newQueueableSource(44100, 16, 1, BUFFER_COUNT)
 lovesid.is_ntsc    = false
 
-lovesid.samples    = { 0, 0, 0 }
+lovesid.samples    = { {}, {}, {} }
 lovesid.freqs      = { 0, 0, 0 }
 
 local function getFrequency(channel)
@@ -216,7 +216,7 @@ local function processFilter(input, lp, bp, hp, resonance)
     if bp then output = output + _filterState.band end
     if hp then output = output + high end
 
-    return output
+    return input
 end
 
 local function stepOscillators()
@@ -354,41 +354,40 @@ function lovesid:update()
         local res = getFilterResonance()
         local mainVol = getVolume() / 15
 
+        for ch = 1, 3 do
+            local word = getFrequency(ch)
+            self.freqs[ch] = wordToHz(word)
+        end
+
         for i = 0, BUFFER_SIZE - 1 do
             updateEnvelope(1)
             updateEnvelope(2)
             updateEnvelope(3)
             stepOscillators()
 
-            lovesid.samples[1] = getSample(1) / 3 or 0
-            lovesid.samples[2] = getSample(2) / 3 or 0
-            lovesid.samples[3] = (not getChannel3Off() and (getSample(3) / 3)) or 0
-
-            for ch = 1, 3 do
-                local word = getFrequency(ch)
-                self.freqs[ch] = wordToHz(word)
-            end
+            local s1, s2, s3 = getSample(1) / 3 or 0, getSample(2) / 3 or 0,
+                (not getChannel3Off() and (getSample(3) / 3)) or 0
+            lovesid.samples[1][i + 1] = s1
+            lovesid.samples[2][i + 1] = s2
+            lovesid.samples[3][i + 1] = s3
 
             local filteredInput = 0
             local unfilteredOutput = 0
 
             if f1 then
-                filteredInput = filteredInput + lovesid.samples[1]
+                filteredInput = filteredInput + s1
             else
-                unfilteredOutput = unfilteredOutput +
-                    lovesid.samples[1]
+                unfilteredOutput = unfilteredOutput + s1
             end
             if f2 then
-                filteredInput = filteredInput + lovesid.samples[2]
+                filteredInput = filteredInput + s2
             else
-                unfilteredOutput = unfilteredOutput +
-                    lovesid.samples[2]
+                unfilteredOutput = unfilteredOutput + s2
             end
             if f3 then
-                filteredInput = filteredInput + lovesid.samples[3]
+                filteredInput = filteredInput + s3
             else
-                unfilteredOutput = unfilteredOutput +
-                    lovesid.samples[3]
+                unfilteredOutput = unfilteredOutput + s3
             end
 
             local filteredOutput = processFilter(filteredInput, lp, bp, hp, res)
