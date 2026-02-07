@@ -43,6 +43,9 @@ local lovesid      = setmetatable({}, {
 lovesid.source     = love.audio.newQueueableSource(44100, 16, 1, BUFFER_COUNT)
 lovesid.is_ntsc    = false
 
+lovesid.samples    = { 0, 0, 0 }
+lovesid.freqs      = { 0, 0, 0 }
+
 local function getFrequency(channel)
     if channel < 1 or channel > 3 then return end
 
@@ -50,6 +53,11 @@ local function getFrequency(channel)
     local lo, hi = _registers[offset] or 0, _registers[offset + 1] or 0
     local word = bit.bor(bit.lshift(hi, 8), lo)
     return word
+end
+
+local function wordToHz(word)
+    local clock = lovesid.is_ntsc and NTSC_CLK or PAL_CLK
+    return word * (clock / 16777216)
 end
 
 local function getPulseWidth(channel)
@@ -180,15 +188,28 @@ end
 
 local function processFilter(input, lp, bp, hp, resonance)
     local cutoff = getFilterCutoff()
-    local f = (cutoff / 2047) * 1.2
 
-    if f > 1.0 then f = 1.0 end
+    local f = (cutoff / 2047) * 0.7
+    if f > 0.85 then f = 0.85 end
 
     local q = 1.0 - (resonance / 15)
+    if q < 0.05 then q = 0.05 end
 
-    local high = input - _filterState.low - (_filterState.band * q)
+    local high = input - _filterState.low - (q * _filterState.band)
     _filterState.band = _filterState.band + (f * high)
     _filterState.low = _filterState.low + (f * _filterState.band)
+
+    if _filterState.band > 1 then
+        _filterState.band = 1
+    elseif _filterState.band < -1 then
+        _filterState.band = -1
+    end
+
+    if _filterState.low > 1 then
+        _filterState.low = 1
+    elseif _filterState.low < -1 then
+        _filterState.low = -1
+    end
 
     local output = 0
     if lp then output = output + _filterState.low end
@@ -320,7 +341,7 @@ local function getSample(channel)
     -- normalize
     local sample = (sampleRaw / 127.5) - 1
 
-    return (sample / 3) * (state.env_level / 0xff) * (getVolume() / 16)
+    return sample * (state.env_level / 0xff) * (getVolume() / 16)
 end
 
 function lovesid:update()
@@ -339,20 +360,41 @@ function lovesid:update()
             updateEnvelope(3)
             stepOscillators()
 
-            local s1 = getSample(1) or 0
-            local s2 = getSample(2) or 0
-            local s3 = (not getChannel3Off() and getSample(3)) or 0
+            lovesid.samples[1] = getSample(1) / 3 or 0
+            lovesid.samples[2] = getSample(2) / 3 or 0
+            lovesid.samples[3] = (not getChannel3Off() and (getSample(3) / 3)) or 0
+
+            for ch = 1, 3 do
+                local word = getFrequency(ch)
+                self.freqs[ch] = wordToHz(word)
+            end
 
             local filteredInput = 0
             local unfilteredOutput = 0
 
-            if f1 then filteredInput = filteredInput + s1 else unfilteredOutput = unfilteredOutput + s1 end
-            if f2 then filteredInput = filteredInput + s2 else unfilteredOutput = unfilteredOutput + s2 end
-            if f3 then filteredInput = filteredInput + s3 else unfilteredOutput = unfilteredOutput + s3 end
+            if f1 then
+                filteredInput = filteredInput + lovesid.samples[1]
+            else
+                unfilteredOutput = unfilteredOutput +
+                    lovesid.samples[1]
+            end
+            if f2 then
+                filteredInput = filteredInput + lovesid.samples[2]
+            else
+                unfilteredOutput = unfilteredOutput +
+                    lovesid.samples[2]
+            end
+            if f3 then
+                filteredInput = filteredInput + lovesid.samples[3]
+            else
+                unfilteredOutput = unfilteredOutput +
+                    lovesid.samples[3]
+            end
 
             local filteredOutput = processFilter(filteredInput, lp, bp, hp, res)
 
             local finalSample = (unfilteredOutput + filteredOutput) * mainVol
+            if finalSample ~= finalSample then finalSample = 0 end
             soundData:setSample(i, math.max(-1, math.min(1, finalSample)))
         end
 
