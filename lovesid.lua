@@ -216,7 +216,7 @@ local function processFilter(input, lp, bp, hp, resonance)
     if bp then output = output + _filterState.band end
     if hp then output = output + high end
 
-    return output
+    return (output * 0.8) + (input * 0.2)
 end
 
 local function stepOscillators()
