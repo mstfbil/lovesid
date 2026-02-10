@@ -1,7 +1,5 @@
 # lovesid
 
-> Warning: This library is by no means close to complete, it may include bugs and inaccuracies when compared to the original hardware
-
 *lovesid* is a MOS Technology 6581/8580 SID (Sound Interface Device) emulator written in Lua for use with LÖVE Framework. It may be used to play .sid files or in Commodore 64 emulators (or rather any computer using the chip) to generate sound.
 
 ## Usage
@@ -37,5 +35,4 @@ In the Commodore 64, the SID chip's registers start at address `$d400`, but in l
 
 ## Development
 
-- ADSR and filters work but don't sound exactly the same with SID
-- It is possible that there are some bugs
+- ADSR and filters have inaccuracies
