@@ -45,6 +45,7 @@ lovesid.is_ntsc    = false
 
 lovesid.samples    = { {}, {}, {} }
 lovesid.freqs      = { 0, 0, 0 }
+lovesid.accs       = { 0, 0, 0 }
 
 local function getFrequency(channel)
     if channel < 1 or channel > 3 then return end
@@ -357,6 +358,7 @@ function lovesid:update()
         for ch = 1, 3 do
             local word = getFrequency(ch)
             self.freqs[ch] = wordToHz(word)
+            self.accs[ch] = _chStates[ch].acc
         end
 
         for i = 0, BUFFER_SIZE - 1 do
