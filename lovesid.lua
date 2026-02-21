@@ -7,8 +7,7 @@ local bit          = require("bit")
 local PAL_CLK      = 985248
 local NTSC_CLK     = 1022727
 local SAMPLE_RATE  = 44100
-local BUFFER_COUNT = 2
-local BUFFER_SIZE  = 1024
+local buffer_count, buffer_size
 local ADSR_TABLE   = {
     attack  = { 0.002, 0.008, 0.016, 0.024, 0.038, 0.056, 0.068, 0.080, 0.100, 0.250, 0.500, 0.800, 1.000, 3.000, 5.000, 8.000 },
     decay   = { 0.006, 0.024, 0.048, 0.072, 0.114, 0.168, 0.204, 0.240, 0.300, 0.750, 1.500, 2.400, 3.000, 9.000, 15.00, 24.00 },
@@ -40,12 +39,25 @@ local lovesid      = setmetatable({}, {
     end
 })
 
-lovesid.source     = love.audio.newQueueableSource(44100, 16, 1, BUFFER_COUNT)
+lovesid.source     = love.audio.newQueueableSource(44100, 16, 1, buffer_count)
 lovesid.is_ntsc    = false
 
 lovesid.samples    = { {}, {}, {} }
 lovesid.freqs      = { 0, 0, 0 }
 lovesid.accs       = { 0, 0, 0 }
+
+function lovesid:configure(o)
+    o            = o or {}
+    buffer_size  = o.buffer_size or 1024
+    buffer_count = o.buffer_count or 2
+
+    if self.source then
+        self.source:stop()
+    end
+    self.source = love.audio.newQueueableSource(SAMPLE_RATE, 16, 1, buffer_count)
+end
+
+lovesid:configure()
 
 local function getFrequency(channel)
     if channel < 1 or channel > 3 then return end
@@ -348,7 +360,7 @@ end
 function lovesid:update()
     self.source:play()
     while self.source:getFreeBufferCount() > 0 do
-        local soundData = love.sound.newSoundData(BUFFER_SIZE, SAMPLE_RATE, 16, 1)
+        local soundData = love.sound.newSoundData(buffer_size, SAMPLE_RATE, 16, 1)
 
         local f1, f2, f3 = getFilterApply()
         local lp, bp, hp = getFilterPass()
@@ -361,7 +373,7 @@ function lovesid:update()
             self.accs[ch] = _chStates[ch].acc
         end
 
-        for i = 0, BUFFER_SIZE - 1 do
+        for i = 0, buffer_size - 1 do
             updateEnvelope(1)
             updateEnvelope(2)
             updateEnvelope(3)
