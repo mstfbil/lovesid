@@ -17,7 +17,8 @@ Below is an example usage with Lua:
 
 -- this file will play a simple triangle wave on channel 1
 
-local sid = require("lovesid")
+local Sid = require("lovesid")
+local sid = Sid()
 
 -- initialize the registers
 sid[1] = 0x00 -- ch1 freq lo
@@ -40,7 +41,8 @@ You can also use the library with YueScript:
 
 -- this file will play a simple triangle wave on channel 1
 
-import "lovesid" as sid
+import "lovesid" as Sid
+sid = Sid!
 
 -- initialize the registers
 sid[1] = 0x00 -- ch1 freq lo
@@ -55,9 +57,15 @@ love.update = ()->
     sid\update!
 ```
 
+### Address Compatibility
+
 In the Commodore 64, the SID chip's registers start at address `$d400`, but in lovesid it starts from 1. This necessitates offsetting the address for use when emulating machines.
 
 `sid[realAddress - 0xd3ff] = value`
+
+### Instancing
+
+You may define as many instances of ``Sid`` as you like, which are fully seperated. This may be useful for stereo SID tracks.
 
 ## Development
 
