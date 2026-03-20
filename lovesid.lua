@@ -77,450 +77,449 @@ local ENV_STATE = { -- 15
 -- define runtime vars
 local channels = { } -- 22
 local filters = { } -- 23
+local sound_buffers = { } -- 24
 
-local _anon_func_0 = function() -- 287
-	local _exp_0 = 0xff -- 287
-	if _exp_0 ~= nil then -- 287
-		return _exp_0 -- 287
-	else -- 287
-		return 0 -- 287
-	end -- 287
-end -- 287
-local Sid -- 25
-local _class_0 -- 25
-local _base_0 = { -- 25
+local _anon_func_0 = function() -- 289
+	local _exp_0 = 0xff -- 289
+	if _exp_0 ~= nil then -- 289
+		return _exp_0 -- 289
+	else -- 289
+		return 0 -- 289
+	end -- 289
+end -- 289
+local Sid -- 26
+local _class_0 -- 26
+local _base_0 = { -- 26
 
-	getVolume = function(self) -- 54
-		local byte = self.registers[25] -- 55
-		return bit.band(byte, 0xf) -- 56
-	end, -- 54
+	getVolume = function(self) -- 56
+		local byte = self.registers[25] -- 57
+		return bit.band(byte, 0xf) -- 58
+	end, -- 56
 
-	getClock = function(self) -- 58
-		return self.is_ntsc and CLOCK.NTSC or CLOCK.PAL -- 58
-	end, -- 58
-
-	getChannelOffset = function(self, ch) -- 60
-		return (ch - 1) * 7 + 1 -- 60
+	getClock = function(self) -- 60
+		return self.is_ntsc and CLOCK.NTSC or CLOCK.PAL -- 60
 	end, -- 60
 
-	getControl = function(self, ch) -- 62
-		local byte = self.registers[self:getChannelOffset(ch) + 4] -- 63
-		return { -- 65
-			gate = bit.band(byte, 0x01) ~= 0, -- 65
-			sync = bit.band(byte, 0x02) ~= 0, -- 66
-			ring = bit.band(byte, 0x04) ~= 0, -- 67
-			test = bit.band(byte, 0x08) ~= 0, -- 68
-			tri = bit.band(byte, 0x10) ~= 0, -- 69
-			saw = bit.band(byte, 0x20) ~= 0, -- 70
-			pulse = bit.band(byte, 0x40) ~= 0, -- 71
-			noise = bit.band(byte, 0x80) ~= 0 -- 72
-		} -- 64
+	getChannelOffset = function(self, ch) -- 62
+		return (ch - 1) * 7 + 1 -- 62
 	end, -- 62
 
-	getADSR = function(self, ch) -- 75
-		local offset = self:getChannelOffset(ch) + 5 -- 76
-		local AD, SR = self.registers[offset], self.registers[offset + 1] -- 77
-		return { -- 79
-			a = bit.band(bit.rshift(AD, 4), 0xf), -- 79
-			d = bit.band(AD, 0xf), -- 80
-			s = bit.band(bit.rshift(SR, 4), 0xf), -- 81
-			r = bit.band(SR, 0xf) -- 82
-		} -- 78
-	end, -- 75
+	getControl = function(self, ch) -- 64
+		local byte = self.registers[self:getChannelOffset(ch) + 4] -- 65
+		return { -- 67
+			gate = bit.band(byte, 0x01) ~= 0, -- 67
+			sync = bit.band(byte, 0x02) ~= 0, -- 68
+			ring = bit.band(byte, 0x04) ~= 0, -- 69
+			test = bit.band(byte, 0x08) ~= 0, -- 70
+			tri = bit.band(byte, 0x10) ~= 0, -- 71
+			saw = bit.band(byte, 0x20) ~= 0, -- 72
+			pulse = bit.band(byte, 0x40) ~= 0, -- 73
+			noise = bit.band(byte, 0x80) ~= 0 -- 74
+		} -- 66
+	end, -- 64
 
-	getFrequencyWord = function(self, ch) -- 85
-		local offset = self:getChannelOffset(ch) -- 86
-		local lo, hi = self.registers[offset], self.registers[offset + 1] -- 87
-		return bit.bor(bit.lshift(hi, 8), lo) -- 88
-	end, -- 85
+	getADSR = function(self, ch) -- 77
+		local offset = self:getChannelOffset(ch) + 5 -- 78
+		local AD, SR = self.registers[offset], self.registers[offset + 1] -- 79
+		return { -- 81
+			a = bit.band(bit.rshift(AD, 4), 0xf), -- 81
+			d = bit.band(AD, 0xf), -- 82
+			s = bit.band(bit.rshift(SR, 4), 0xf), -- 83
+			r = bit.band(SR, 0xf) -- 84
+		} -- 80
+	end, -- 77
 
-	freqWordToHz = function(self, word) -- 90
-		return word * self:getClock() / 16777216 -- 90
-	end, -- 90
+	getFrequencyWord = function(self, ch) -- 87
+		local offset = self:getChannelOffset(ch) -- 88
+		local lo, hi = self.registers[offset], self.registers[offset + 1] -- 89
+		return bit.bor(bit.lshift(hi, 8), lo) -- 90
+	end, -- 87
 
-	getPulseWidth = function(self, ch) -- 92
-		local offset = self:getChannelOffset(ch) + 2 -- 93
-		local lo, hi = self.registers[offset], bit.band(self.registers[offset + 1], 0xf) -- 94
-		local _exp_0 = bit.bor(bit.lshift(hi, 8), lo) -- 95
-		if _exp_0 ~= nil then -- 95
-			return _exp_0 -- 95
-		else -- 95
-			return 0 -- 95
-		end -- 95
+	freqWordToHz = function(self, word) -- 92
+		return word * self:getClock() / 16777216 -- 92
 	end, -- 92
 
-	getFilterCutoff = function(self) -- 97
-		local lo, hi = bit.band(self.registers[22], 0x7), self.registers[23] -- 98
-		return bit.bor(lo, bit.lshift(hi, 3)) -- 99
-	end, -- 97
+	getPulseWidth = function(self, ch) -- 94
+		local offset = self:getChannelOffset(ch) + 2 -- 95
+		local lo, hi = self.registers[offset], bit.band(self.registers[offset + 1], 0xf) -- 96
+		local _exp_0 = bit.bor(bit.lshift(hi, 8), lo) -- 97
+		if _exp_0 ~= nil then -- 97
+			return _exp_0 -- 97
+		else -- 97
+			return 0 -- 97
+		end -- 97
+	end, -- 94
 
-	getFilterResonance = function(self) -- 101
-		local byte = self.registers[24] -- 102
-		return bit.band(bit.rshift(byte, 4), 0xf) -- 103
-	end, -- 101
+	getFilterCutoff = function(self) -- 99
+		local lo, hi = bit.band(self.registers[22], 0x7), self.registers[23] -- 100
+		return bit.bor(lo, bit.lshift(hi, 3)) -- 101
+	end, -- 99
 
-	getFilterApply = function(self) -- 105
-		local byte = self.registers[24] -- 106
-		return { -- 108
-			bit.band(byte, 0x1) ~= 0, -- 108
-			bit.band(byte, 0x2) ~= 0, -- 109
-			bit.band(byte, 0x4) ~= 0 -- 110
-		} -- 107
-	end, -- 105
+	getFilterResonance = function(self) -- 103
+		local byte = self.registers[24] -- 104
+		return bit.band(bit.rshift(byte, 4), 0xf) -- 105
+	end, -- 103
 
-	getFilterPass = function(self) -- 113
-		local byte = self.registers[25] -- 114
-		return { -- 116
-			low_pass = bit.band(byte, 0x10) ~= 0, -- 116
-			band_pass = bit.band(byte, 0x20) ~= 0, -- 117
-			high_pass = bit.band(byte, 0x40) ~= 0 -- 118
-		} -- 115
-	end, -- 113
+	getFilterApply = function(self) -- 107
+		local byte = self.registers[24] -- 108
+		return { -- 110
+			bit.band(byte, 0x1) ~= 0, -- 110
+			bit.band(byte, 0x2) ~= 0, -- 111
+			bit.band(byte, 0x4) ~= 0 -- 112
+		} -- 109
+	end, -- 107
 
-	getChannel3Off = function(self) -- 121
-		local byte = self.registers[25] -- 122
-		return bit.band(byte, 0x80) == 0x80 -- 123
-	end, -- 121
+	getFilterPass = function(self) -- 115
+		local byte = self.registers[25] -- 116
+		return { -- 118
+			low_pass = bit.band(byte, 0x10) ~= 0, -- 118
+			band_pass = bit.band(byte, 0x20) ~= 0, -- 119
+			high_pass = bit.band(byte, 0x40) ~= 0 -- 120
+		} -- 117
+	end, -- 115
 
-	updateEnvelope = function(self, ch) -- 125
-		local state = channels[self][ch] -- 126
-		local gate = self:getControl(ch).gate -- 127
-		local a, d, s, r -- 128
-		do -- 128
-			local _obj_0 = self:getADSR(ch) -- 128
-			a, d, s, r = _obj_0.a, _obj_0.d, _obj_0.s, _obj_0.r -- 128
-		end -- 128
-		local sustain_level = s * 17 -- 129
+	getChannel3Off = function(self) -- 123
+		local byte = self.registers[25] -- 124
+		return bit.band(byte, 0x80) == 0x80 -- 125
+	end, -- 123
 
-		if gate then -- 131
-			if state.env_state == ENV_STATE.IDLE or state.env_state == ENV_STATE.RELEASE then -- 132
-				state.env_state = ENV_STATE.ATTACK -- 133
-			end -- 132
-		else -- 135
-			state.env_state = ENV_STATE.RELEASE -- 135
-		end -- 131
+	updateEnvelope = function(self, ch) -- 127
+		local state = channels[self][ch] -- 128
+		local gate = self:getControl(ch).gate -- 129
+		local a, d, s, r -- 130
+		do -- 130
+			local _obj_0 = self:getADSR(ch) -- 130
+			a, d, s, r = _obj_0.a, _obj_0.d, _obj_0.s, _obj_0.r -- 130
+		end -- 130
+		local sustain_level = s * 17 -- 131
 
-		if state.env_state == ENV_STATE.ATTACK then -- 137
-			local duration = ADSR_LOOKUP.ATTACK[a + 1] -- 138
-			state.env_level = state.env_level + 255 / duration * SAMPLE_DT -- 139
-			if state.env_level >= 255 then -- 140
-				state.env_level = 255 -- 141
-				state.env_state = ENV_STATE.DECAY -- 142
-			end -- 140
-		elseif state.env_state == ENV_STATE.DECAY then -- 143
-			local duration = ADSR_LOOKUP.DECAY[d + 1] -- 144
-			state.env_level = state.env_level - 255 / duration * SAMPLE_DT -- 145
-			if state.env_level <= sustain_level then -- 146
-				state.env_level = sustain_level -- 147
-				state.env_state = ENV_STATE.SUSTAIN -- 148
-			end -- 146
-		elseif state.env_state == ENV_STATE.SUSTAIN then -- 149
-			state.env_level = sustain_level -- 150
-		elseif state.env_state == ENV_STATE.RELEASE then -- 151
-			local duration = ADSR_LOOKUP.RELEASE[r + 1] -- 152
-			state.env_level = state.env_level - 255 / duration * SAMPLE_DT -- 153
-			if state.env_level <= 0 then -- 154
-				state.env_level = 0 -- 155
-				state.env_state = ENV_STATE.IDLE -- 156
-			end -- 154
-		end -- 137
-	end, -- 125
+		if gate then -- 133
+			if state.env_state == ENV_STATE.IDLE or state.env_state == ENV_STATE.RELEASE then -- 134
+				state.env_state = ENV_STATE.ATTACK -- 135
+			end -- 134
+		else -- 137
+			state.env_state = ENV_STATE.RELEASE -- 137
+		end -- 133
 
-	processFilter = function(self, input, lp, bp, hp, resonance) -- 158
-		local output = 0 -- 159
+		if state.env_state == ENV_STATE.ATTACK then -- 139
+			local duration = ADSR_LOOKUP.ATTACK[a + 1] -- 140
+			state.env_level = state.env_level + 255 / duration * SAMPLE_DT -- 141
+			if state.env_level >= 255 then -- 142
+				state.env_level = 255 -- 143
+				state.env_state = ENV_STATE.DECAY -- 144
+			end -- 142
+		elseif state.env_state == ENV_STATE.DECAY then -- 145
+			local duration = ADSR_LOOKUP.DECAY[d + 1] -- 146
+			state.env_level = state.env_level - 255 / duration * SAMPLE_DT -- 147
+			if state.env_level <= sustain_level then -- 148
+				state.env_level = sustain_level -- 149
+				state.env_state = ENV_STATE.SUSTAIN -- 150
+			end -- 148
+		elseif state.env_state == ENV_STATE.SUSTAIN then -- 151
+			state.env_level = sustain_level -- 152
+		elseif state.env_state == ENV_STATE.RELEASE then -- 153
+			local duration = ADSR_LOOKUP.RELEASE[r + 1] -- 154
+			state.env_level = state.env_level - 255 / duration * SAMPLE_DT -- 155
+			if state.env_level <= 0 then -- 156
+				state.env_level = 0 -- 157
+				state.env_state = ENV_STATE.IDLE -- 158
+			end -- 156
+		end -- 139
+	end, -- 127
 
-		local cutoff = self:getFilterCutoff() -- 161
+	processFilter = function(self, input, lp, bp, hp, resonance) -- 160
+		local output = 0 -- 161
 
-		local f = cutoff / 2047 * 0.7 -- 163
-		if f > 0.85 then -- 164
-			f = 0.85 -- 165
-		end -- 164
+		local cutoff = self:getFilterCutoff() -- 163
 
-		local q = 1.0 - resonance / 15 -- 167
-		if q < 0.05 then -- 168
-			q = 0.05 -- 169
-		end -- 168
+		local f = cutoff / 2047 * 0.7 -- 165
+		if f > 0.85 then -- 166
+			f = 0.85 -- 167
+		end -- 166
 
-		local high = input - filters[self].low - q * filters[self].band -- 171
-		filters[self].band = filters[self].band + f * high -- 172
-		filters[self].low = filters[self].low + f * filters[self].band -- 173
+		local q = 1.0 - resonance / 15 -- 169
+		if q < 0.05 then -- 170
+			q = 0.05 -- 171
+		end -- 170
 
-		if filters[self].band > 1 then -- 175
-			filters[self].band = 1 -- 175
-		elseif filters[self].band < -1 then -- 176
-			filters[self].band = -1 -- 176
-		end -- 175
+		local high = input - filters[self].low - q * filters[self].band -- 173
+		filters[self].band = filters[self].band + f * high -- 174
+		filters[self].low = filters[self].low + f * filters[self].band -- 175
 
-		if filters[self].low > 1 then -- 178
-			filters[self].low = 1 -- 178
-		elseif filters[self].low < -1 then -- 179
-			filters[self].low = -1 -- 179
-		end -- 178
+		if filters[self].band > 1 then -- 177
+			filters[self].band = 1 -- 177
+		elseif filters[self].band < -1 then -- 178
+			filters[self].band = -1 -- 178
+		end -- 177
 
-		if lp then -- 181
-			output = output + filters[self].low -- 181
-		end -- 181
-		if bp then -- 182
-			output = output + filters[self].band -- 182
-		end -- 182
-		if hp then -- 183
-			output = output + high -- 183
+		if filters[self].low > 1 then -- 180
+			filters[self].low = 1 -- 180
+		elseif filters[self].low < -1 then -- 181
+			filters[self].low = -1 -- 181
+		end -- 180
+
+		if lp then -- 183
+			output = output + filters[self].low -- 183
 		end -- 183
+		if bp then -- 184
+			output = output + filters[self].band -- 184
+		end -- 184
+		if hp then -- 185
+			output = output + high -- 185
+		end -- 185
 
-		return output * 0.8 + input * 0.2 -- 185
-	end, -- 158
+		return output * 0.8 + input * 0.2 -- 187
+	end, -- 160
 
-	stepOscillators = function(self) -- 187
-		local clock = self:getClock() -- 188
-		local dt_clock = clock / SAMPLE_RATE -- 189
+	stepOscillators = function(self) -- 189
+		local clock = self:getClock() -- 190
+		local dt_clock = clock / SAMPLE_RATE -- 191
 
-		for i = 1, 3 do -- 191
-			local state = channels[self][i] -- 192
-			local test = self:getControl(i).test -- 193
+		for i = 1, 3 do -- 193
+			local state = channels[self][i] -- 194
+			local test = self:getControl(i).test -- 195
 
-			state.prev_acc = state.acc -- 195
-			if test then -- 196
-				state.noise_reg = 0xfffff -- 197
-				state.acc = 0 -- 198
-			else -- 200
-				local freq = self:getFrequencyWord(i) -- 200
-				state.acc = (state.acc + freq * dt_clock) % 16777216 -- 201
-			end -- 196
-		end -- 191
+			state.prev_acc = state.acc -- 197
+			if test then -- 198
+				state.noise_reg = 0xfffff -- 199
+				state.acc = 0 -- 200
+			else -- 202
+				local freq = self:getFrequencyWord(i) -- 202
+				state.acc = (state.acc + freq * dt_clock) % 16777216 -- 203
+			end -- 198
+		end -- 193
 
-		for i = 1, 3 do -- 203
-			local sync = self:getControl(i).sync -- 204
-			if sync then -- 205
-				local mod_i -- 206
-				if i == 1 then -- 206
-					mod_i = 3 -- 206
-				else -- 206
-					mod_i = i - 1 -- 206
-				end -- 206
-				if channels[self][mod_i].acc < channels[self][mod_i].prev_acc then -- 207
-					channels[self][mod_i].acc = 0 -- 208
-				end -- 207
-			end -- 205
-		end -- 203
-	end, -- 187
+		for i = 1, 3 do -- 205
+			local sync = self:getControl(i).sync -- 206
+			if sync then -- 207
+				local mod_i -- 208
+				if i == 1 then -- 208
+					mod_i = 3 -- 208
+				else -- 208
+					mod_i = i - 1 -- 208
+				end -- 208
+				if channels[self][mod_i].acc < channels[self][mod_i].prev_acc then -- 209
+					channels[self][mod_i].acc = 0 -- 210
+				end -- 209
+			end -- 207
+		end -- 205
+	end, -- 189
 
-	getNoiseSample = function(self, ch) -- 210
-		local state = channels[self][ch] -- 211
-		local acc_i = math.floor(state.acc) -- 212
-		local current_bit19 = bit.band(bit.rshift(acc_i, 19), 1) -- 213
+	getNoiseSample = function(self, ch) -- 212
+		local state = channels[self][ch] -- 213
+		local acc_i = math.floor(state.acc) -- 214
+		local current_bit19 = bit.band(bit.rshift(acc_i, 19), 1) -- 215
 
-		if state.last_bit19 == 0 and current_bit19 == 1 then -- 215
-			local reg = state.noise_reg -- 216
-			local bit22 = bit.band(bit.rshift(reg, 22), 1) -- 217
-			local bit17 = bit.band(bit.rshift(reg, 17), 1) -- 218
-			local feedback = bit.bxor(bit22, bit17) -- 219
+		if state.last_bit19 == 0 and current_bit19 == 1 then -- 217
+			local reg = state.noise_reg -- 218
+			local bit22 = bit.band(bit.rshift(reg, 22), 1) -- 219
+			local bit17 = bit.band(bit.rshift(reg, 17), 1) -- 220
+			local feedback = bit.bxor(bit22, bit17) -- 221
 
-			reg = bit.band(bit.lshift(reg, 1), 0x7fffff) -- 221
-			reg = bit.bor(reg, feedback) -- 222
+			reg = bit.band(bit.lshift(reg, 1), 0x7fffff) -- 223
+			reg = bit.bor(reg, feedback) -- 224
 
-			state.noise_reg = reg -- 224
-		end -- 215
-		state.last_bit19 = current_bit19 -- 225
+			state.noise_reg = reg -- 226
+		end -- 217
+		state.last_bit19 = current_bit19 -- 227
 
-		local r = state.noise_reg -- 227
-		local out = 0 -- 228
-		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 22), 1), 7)) -- 229
-		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 20), 1), 6)) -- 230
-		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 16), 1), 5)) -- 231
-		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 13), 1), 4)) -- 232
-		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 11), 1), 3)) -- 233
-		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 7), 1), 2)) -- 234
-		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 4), 1), 1)) -- 235
-		return bit.bor(out, bit.band(bit.rshift(r, 2), 1)) -- 236
-	end, -- 210
+		local r = state.noise_reg -- 229
+		local out = 0 -- 230
+		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 22), 1), 7)) -- 231
+		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 20), 1), 6)) -- 232
+		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 16), 1), 5)) -- 233
+		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 13), 1), 4)) -- 234
+		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 11), 1), 3)) -- 235
+		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 7), 1), 2)) -- 236
+		out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 4), 1), 1)) -- 237
+		return bit.bor(out, bit.band(bit.rshift(r, 2), 1)) -- 238
+	end, -- 212
 
-	getSample = function(self, ch) -- 238
-		local state = channels[self][ch] -- 239
-		local mod_i -- 240
-		if ch == 1 then -- 240
-			mod_i = 3 -- 240
-		else -- 240
-			mod_i = ch - 1 -- 240
-		end -- 240
-		local ring, test, tri, saw, pulse, noise -- 241
-		do -- 241
-			local _obj_0 = self:getControl(ch) -- 241
-			ring, test, tri, saw, pulse, noise = _obj_0.ring, _obj_0.test, _obj_0.tri, _obj_0.saw, _obj_0.pulse, _obj_0.noise -- 241
-		end -- 241
-
-		if test then -- 243
-			return 0 -- 243
+	getSample = function(self, ch) -- 240
+		local state = channels[self][ch] -- 241
+		local mod_i -- 242
+		if ch == 1 then -- 242
+			mod_i = 3 -- 242
+		else -- 242
+			mod_i = ch - 1 -- 242
+		end -- 242
+		local ring, test, tri, saw, pulse, noise -- 243
+		do -- 243
+			local _obj_0 = self:getControl(ch) -- 243
+			ring, test, tri, saw, pulse, noise = _obj_0.ring, _obj_0.test, _obj_0.tri, _obj_0.saw, _obj_0.pulse, _obj_0.noise -- 243
 		end -- 243
 
-		local sample_raw = 0xff -- 245
-		local any_wave = false -- 246
-		local acc_i = math.floor(state.acc) -- 247
+		if test then -- 245
+			return 0 -- 245
+		end -- 245
 
-		if tri then -- 249
-			local raw_tri_acc = acc_i -- 250
-			local mod_acc = channels[self][mod_i].acc -- 251
+		local sample_raw = 0xff -- 247
+		local any_wave = false -- 248
+		local acc_i = math.floor(state.acc) -- 249
 
-			if ring then -- 253
-				local car_msb = bit.band(bit.rshift(acc_i, 23), 1) -- 254
-				local mod_msb = bit.band(bit.rshift(mod_acc, 23), 1) -- 255
-				local ring_msb = bit.bxor(car_msb, mod_msb) -- 256
+		if tri then -- 251
+			local raw_tri_acc = acc_i -- 252
+			local mod_acc = channels[self][mod_i].acc -- 253
 
-				raw_tri_acc = bit.bor(bit.band(acc_i, 0x7fffff), bit.lshift(ring_msb, 23)) -- 258
-			end -- 253
+			if ring then -- 255
+				local car_msb = bit.band(bit.rshift(acc_i, 23), 1) -- 256
+				local mod_msb = bit.band(bit.rshift(mod_acc, 23), 1) -- 257
+				local ring_msb = bit.bxor(car_msb, mod_msb) -- 258
 
-			local msb = bit.band(bit.rshift(raw_tri_acc, 23), 1) -- 263
-			local v = bit.band(bit.rshift(raw_tri_acc, 16), 0x7f) -- 264
+				raw_tri_acc = bit.bor(bit.band(acc_i, 0x7fffff), bit.lshift(ring_msb, 23)) -- 260
+			end -- 255
 
-			if msb == 1 then -- 266
-				v = 0x7f - v -- 266
-			end -- 266
-			sample_raw = bit.band(sample_raw, v * 2) -- 267
-			any_wave = true -- 268
-		end -- 249
-		if saw then -- 269
-			local v = bit.band(bit.rshift(acc_i, 16), 0xff) -- 270
-			sample_raw = bit.band(sample_raw, v) -- 271
-			any_wave = true -- 272
-		end -- 269
-		if pulse then -- 273
-			local pw = self:getPulseWidth(ch) -- 274
-			local acc12 = bit.band(bit.rshift(acc_i, 12), 0xfff) -- 275
-			local v = (acc12 < pw) and 0xff or 0x00 -- 276
-			sample_raw = bit.band(sample_raw, v) -- 277
-			any_wave = true -- 278
-		end -- 273
-		if noise then -- 279
-			local v = self:getNoiseSample(ch) -- 280
-			sample_raw = bit.band(sample_raw, v) -- 281
-			any_wave = true -- 282
-		end -- 279
+			local msb = bit.band(bit.rshift(raw_tri_acc, 23), 1) -- 265
+			local v = bit.band(bit.rshift(raw_tri_acc, 16), 0x7f) -- 266
 
-		if not any_wave then -- 284
-			return 0 -- 284
-		end -- 284
+			if msb == 1 then -- 268
+				v = 0x7f - v -- 268
+			end -- 268
+			sample_raw = bit.band(sample_raw, v * 2) -- 269
+			any_wave = true -- 270
+		end -- 251
+		if saw then -- 271
+			local v = bit.band(bit.rshift(acc_i, 16), 0xff) -- 272
+			sample_raw = bit.band(sample_raw, v) -- 273
+			any_wave = true -- 274
+		end -- 271
+		if pulse then -- 275
+			local pw = self:getPulseWidth(ch) -- 276
+			local acc12 = bit.band(bit.rshift(acc_i, 12), 0xfff) -- 277
+			local v = (acc12 < pw) and 0xff or 0x00 -- 278
+			sample_raw = bit.band(sample_raw, v) -- 279
+			any_wave = true -- 280
+		end -- 275
+		if noise then -- 281
+			local v = self:getNoiseSample(ch) -- 282
+			sample_raw = bit.band(sample_raw, v) -- 283
+			any_wave = true -- 284
+		end -- 281
 
-		local sample = sample_raw / 127.5 - 1 -- 286
-		return sample * state.env_level / _anon_func_0() -- 287
-	end, -- 238
+		if not any_wave then -- 286
+			return 0 -- 286
+		end -- 286
 
-	update = function(self) -- 289
-		self.source:play() -- 290
+		local sample = sample_raw / 127.5 - 1 -- 288
+		return sample * state.env_level / _anon_func_0() -- 289
+	end, -- 240
 
-		while self.source:getFreeBufferCount() > 0 do -- 292
-			local sound_data = love.sound.newSoundData(self.buffer_size, SAMPLE_RATE, 16, 1) -- 293
+	update = function(self) -- 291
+		self.source:play() -- 292
 
-			local filter_apply = self:getFilterApply() -- 295
-			local filter_pass = self:getFilterPass() -- 296
-			local res = self:getFilterResonance() -- 297
-			local main_vol = self:getVolume() / 15 -- 298
+		while self.source:getFreeBufferCount() > 0 do -- 294
+			local sound_buffer = sound_buffers[self] -- 295
 
-			for i = 0, self.buffer_size - 1 do -- 300
-				for ch = 1, 3 do -- 301
-					self:updateEnvelope(ch) -- 301
-				end -- 301
-				self:stepOscillators() -- 302
+			local filter_apply = self:getFilterApply() -- 297
+			local filter_pass = self:getFilterPass() -- 298
+			local res = self:getFilterResonance() -- 299
+			local main_vol = self:getVolume() / 15 -- 300
 
-				local through_filter = 0 -- 304
-				local unfiltered = 0 -- 304
-				for ch = 1, 3 do -- 305
-					local sample = self:getSample(ch) / 3 -- 306
-					if filter_apply[ch] then -- 307
-						through_filter = through_filter + sample -- 308
-					else -- 310
-						unfiltered = unfiltered + sample -- 310
-					end -- 307
-				end -- 305
+			for i = 0, self.buffer_size - 1 do -- 302
+				for ch = 1, 3 do -- 303
+					self:updateEnvelope(ch) -- 303
+				end -- 303
+				self:stepOscillators() -- 304
 
-				local output = unfiltered + self:processFilter(through_filter, filter_pass.low_pass, filter_pass.band_pass, filter_pass.high_pass, res) -- 312
-				output = output * main_vol -- 313
-				sound_data:setSample(i, math.max(-1, math.min(1, output))) -- 314
-			end -- 300
+				local through_filter = 0 -- 306
+				local unfiltered = 0 -- 306
+				for ch = 1, 3 do -- 307
+					local sample = self:getSample(ch) / 3 -- 308
+					if filter_apply[ch] then -- 309
+						through_filter = through_filter + sample -- 310
+					else -- 312
+						unfiltered = unfiltered + sample -- 312
+					end -- 309
+				end -- 307
 
-			self.source:queue(sound_data) -- 316
-		end -- 292
-	end -- 289
-} -- 25
-if _base_0.__index == nil then -- 25
-	_base_0.__index = _base_0 -- 25
-end -- 25
-_class_0 = setmetatable({ -- 25
-	__init = function(self, buffer_size, buffer_count, is_ntsc) -- 26
-		if buffer_size ~= nil then -- 27
-			self.buffer_size = buffer_size -- 27
-		else -- 27
-			self.buffer_size = 1024 -- 27
+				local output = unfiltered + self:processFilter(through_filter, filter_pass.low_pass, filter_pass.band_pass, filter_pass.high_pass, res) -- 314
+				output = output * main_vol -- 315
+				sound_buffer:setSample(i, math.max(-1, math.min(1, output))) -- 316
+			end -- 302
+
+			self.source:queue(sound_buffer) -- 318
+		end -- 294
+	end -- 291
+} -- 26
+if _base_0.__index == nil then -- 26
+	_base_0.__index = _base_0 -- 26
+end -- 26
+_class_0 = setmetatable({ -- 26
+	__init = function(self, buffer_size, buffer_count, is_ntsc) -- 27
+		if buffer_size == nil then -- 27
+			buffer_size = 1024 -- 27
 		end -- 27
-		if buffer_count ~= nil then -- 28
-			self.buffer_count = buffer_count -- 28
-		else -- 28
-			self.buffer_count = 8 -- 28
-		end -- 28
-		if is_ntsc ~= nil then -- 29
-			self.is_ntsc = is_ntsc -- 29
-		else -- 29
-			self.is_ntsc = false -- 29
-		end -- 29
+		if buffer_count == nil then -- 27
+			buffer_count = 8 -- 27
+		end -- 27
+		if is_ntsc == nil then -- 27
+			is_ntsc = false -- 27
+		end -- 27
+		self.buffer_size = buffer_size -- 28
+		self.buffer_count = buffer_count -- 29
+		self.is_ntsc = is_ntsc -- 30
 
-		self.registers = setmetatable({ }, { -- 32
-			__index = function() -- 32
-				return 0 -- 32
-			end, -- 32
-			__newindex = function(self, k, v) -- 33
-				if 1 <= k and k <= 25 then -- 34
-					return rawset(self, k, bit.band(v, 0xff)) -- 34
-				end -- 34
-			end -- 33
-		}) -- 31
-		setmetatable(self, { -- 37
-			__index = function(self, k) -- 37
-				if type(k) == "number" then -- 38
-					return self.registers[k] -- 39
-				else -- 41
-					return Sid[k] -- 41
-				end -- 38
-			end, -- 37
-			__newindex = function(self, k, v) -- 42
-				if type(k) == "number" then -- 43
-					self.registers[k] = v -- 44
-				else -- 46
-					return rawset(self, k, v) -- 46
-				end -- 43
-			end -- 42
-		}) -- 36
-		do -- 48
-			local _accum_0 = { } -- 48
-			local _len_0 = 1 -- 48
-			for i = 1, 3 do -- 48
-				_accum_0[_len_0] = { -- 49
-					acc = 0.0, -- 49
-					prev_acc = 0.0, -- 49
-					env_level = 0, -- 49
-					env_state = ENV_STATE.IDLE, -- 49
-					noise_reg = 0xfffff, -- 49
-					last_bit19 = 0 -- 49
-				} -- 49
-				_len_0 = _len_0 + 1 -- 49
-			end -- 48
-			channels[self] = _accum_0 -- 48
-		end -- 48
-		filters[self] = { -- 50
-			low = 0, -- 50
-			band = 0 -- 50
-		} -- 50
+		self.registers = setmetatable({ }, { -- 33
+			__index = function() -- 33
+				return 0 -- 33
+			end, -- 33
+			__newindex = function(self, k, v) -- 34
+				if 1 <= k and k <= 25 then -- 35
+					return rawset(self, k, bit.band(v, 0xff)) -- 35
+				end -- 35
+			end -- 34
+		}) -- 32
+		setmetatable(self, { -- 38
+			__index = function(self, k) -- 38
+				if type(k) == "number" then -- 39
+					return self.registers[k] -- 40
+				else -- 42
+					return Sid[k] -- 42
+				end -- 39
+			end, -- 38
+			__newindex = function(self, k, v) -- 43
+				if type(k) == "number" then -- 44
+					self.registers[k] = v -- 45
+				else -- 47
+					return rawset(self, k, v) -- 47
+				end -- 44
+			end -- 43
+		}) -- 37
+		do -- 49
+			local _accum_0 = { } -- 49
+			local _len_0 = 1 -- 49
+			for i = 1, 3 do -- 49
+				_accum_0[_len_0] = { -- 50
+					acc = 0.0, -- 50
+					prev_acc = 0.0, -- 50
+					env_level = 0, -- 50
+					env_state = ENV_STATE.IDLE, -- 50
+					noise_reg = 0xfffff, -- 50
+					last_bit19 = 0 -- 50
+				} -- 50
+				_len_0 = _len_0 + 1 -- 50
+			end -- 49
+			channels[self] = _accum_0 -- 49
+		end -- 49
+		filters[self] = { -- 51
+			low = 0, -- 51
+			band = 0 -- 51
+		} -- 51
+		sound_buffers[self] = love.sound.newSoundData(self.buffer_size, SAMPLE_RATE, 16, 1) -- 52
 
-		self.source = love.audio.newQueueableSource(SAMPLE_RATE, 16, 1, self.buffer_count) -- 52
-	end, -- 26
-	__base = _base_0, -- 25
-	__name = "Sid" -- 25
-}, { -- 25
-	__index = _base_0, -- 25
-	__call = function(cls, ...) -- 25
-		local _self_0 = setmetatable({ }, _base_0) -- 25
-		cls.__init(_self_0, ...) -- 25
-		return _self_0 -- 25
-	end -- 25
-}) -- 25
-_base_0.__class = _class_0 -- 25
-Sid = _class_0 -- 25
-_module_0 = _class_0 -- 25
+		self.source = love.audio.newQueueableSource(SAMPLE_RATE, 16, 1, self.buffer_count) -- 54
+	end, -- 27
+	__base = _base_0, -- 26
+	__name = "Sid" -- 26
+}, { -- 26
+	__index = _base_0, -- 26
+	__call = function(cls, ...) -- 26
+		local _self_0 = setmetatable({ }, _base_0) -- 26
+		cls.__init(_self_0, ...) -- 26
+		return _self_0 -- 26
+	end -- 26
+}) -- 26
+_base_0.__class = _class_0 -- 26
+Sid = _class_0 -- 26
+_module_0 = _class_0 -- 26
 return _module_0 -- 1
