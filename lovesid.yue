@@ -19,304 +19,298 @@ const ENV_STATE =
     RELEASE: 5
 
 -- define runtime vars
-channels = for i = 1, 3
-    { acc: 0.0, prev_acc: 0.0, env_level: 0, env_state: ENV_STATE.IDLE, noise_reg: 0xfffff, last_bit19:0 }
-filter = { low: 0, band: 0 }
-local buffer_size, buffer_count
+channels = {}
+filters = {}
 
--- module
-_registers =
-    <index>: (k)=>
-        rawget(self, k) ?? 0
+export default class Sid
+    new: (buffer_size, buffer_count, is_ntsc)=>
+        @buffer_size = buffer_size ?? 1024
+        @buffer_count = buffer_count ?? 8
+        @is_ntsc = is_ntsc ?? false
 
-lovesid =
-    <newindex>: (k, v)=>
-        if type(k) == "number" and 1 <= k <= 25
-            _registers[k] = bit.band v, 0xff
-        else
-            rawset self, k, v
-            return
-    <index>: (k)=>
-        if type(k) == "number"
-            _registers[k]
-        else
-            rawget self, k
-    source: love.audio.newQueueableSource SAMPLE_RATE, 16, 1, buffer_count
-    is_ntsc: false
-
-lovesid.configure = (o = {})=>
-    buffer_size = o.buffer_size ?? 1024
-    buffer_count = o.buffer_count ?? 8
-    self.source?\stop()
-    self.source = love.audio.newQueueableSource SAMPLE_RATE, 16, 1, buffer_count
-lovesid\configure!
-
-getClock = ()->
-    lovesid.is_ntsc and CLOCK.NTSC or CLOCK.PAL
-
-getChannelOffset = (ch)->
-    (ch - 1) * 7 + 1
-
-getFrequency = (ch)->
-    offset = getChannelOffset(ch)
-    lo, hi = _registers[offset], _registers[offset + 1]
-    bit.bor(bit.lshift(hi, 8) , lo)
-
-wordToHz = (word)->
-    word * getClock! / 16777216
-
-getPulseWidth = (ch)->
-    offset = getChannelOffset(ch) + 2
-    lo, hi = _registers[offset], bit.band(_registers[offset + 1], 0xf)
-    bit.bor(bit.lshift(hi, 8), lo) ?? 0
-
-getControl = (ch)->
-    offset = getChannelOffset(ch) + 4
-    byte = _registers[offset]
-    {
-        gate:  bit.band(byte, 0x01) != 0
-        sync:  bit.band(byte, 0x02) != 0
-        ring:  bit.band(byte, 0x04) != 0
-        test:  bit.band(byte, 0x08) != 0
-        tri:   bit.band(byte, 0x10) != 0
-        saw:   bit.band(byte, 0x20) != 0
-        pulse: bit.band(byte, 0x40) != 0
-        noise: bit.band(byte, 0x80) != 0
-    }
-
-getADSR = (ch)->
-    offset = getChannelOffset(ch) + 5
-    AD, SR = _registers[offset], _registers[offset + 1]
-    {
-        a: bit.band(bit.rshift(AD, 4), 0xf)
-        d: bit.band(AD, 0xf)
-        s: bit.band(bit.rshift(SR, 4), 0xf)
-        r: bit.band(SR, 0xf)
-    }
-
-getVolume = ()->
-    byte = _registers[25]
-    bit.band(byte, 0xf)
-
-getFilterCutoff = ()->
-    local lo, hi = bit.band(_registers[22], 0x7), _registers[23]
-    bit.bor(lo, bit.lshift(hi, 3))
-
-getFilterResonance = ()->
-    byte = _registers[24]
-    bit.band(bit.rshift(byte, 4), 0xf)
-
-getFilterApply = ()->
-    byte = _registers[24]
-    {
-        bit.band(byte, 0x1) != 0
-        bit.band(byte, 0x2) != 0
-        bit.band(byte, 0x4) != 0
-    }
-
-getFilterPass = ()->
-    byte = _registers[25]
-    {
-        low_pass: bit.band(byte, 0x10) != 0
-        band_pass: bit.band(byte, 0x20) != 0
-        high_pass: bit.band(byte, 0x40) != 0
-    }
-
-getChannel3Off = ()->
-    local byte = _registers[25]
-    bit.band(byte, 0x80) == 0x80
-
-updateEnvelope = (ch)->
-    state = channels[ch]
-    { :gate } = getControl ch
-    { :a, :d, :s, :r } = getADSR ch
-    sustain_level = s * 17
-
-    if gate
-        if state.env_state == ENV_STATE.IDLE or state.env_state == ENV_STATE.RELEASE
-            state.env_state = ENV_STATE.ATTACK
-    else
-        state.env_state = ENV_STATE.RELEASE
-
-    if state.env_state == ENV_STATE.ATTACK
-        duration = ADSR_LOOKUP.ATTACK[a + 1]
-        state.env_level = state.env_level + 255 / duration * SAMPLE_DT
-        if state.env_level >= 255
-            state.env_level = 255
-            state.env_state = ENV_STATE.DECAY
-    elseif state.env_state == ENV_STATE.DECAY
-        duration = ADSR_LOOKUP.DECAY[d + 1]
-        state.env_level = state.env_level - 255 / duration * SAMPLE_DT
-        if state.env_level <= sustain_level
-            state.env_level = sustain_level
-            state.env_state = ENV_STATE.SUSTAIN
-    elseif state.env_state == ENV_STATE.SUSTAIN
-        state.env_level = sustain_level
-    elseif state.env_state == ENV_STATE.RELEASE
-        duration = ADSR_LOOKUP.RELEASE[r + 1]
-        state.env_level = state.env_level - 255 / duration * SAMPLE_DT
-        if state.env_level <= 0
-            state.env_level = 0
-            state.env_state = ENV_STATE.IDLE
-
-processFilter = (input, lp, bp, hp, resonance)->
-    output = 0
-
-    cutoff = getFilterCutoff!
-
-    f = cutoff / 2047 * 0.7
-    if f > 0.85
-        f = 0.85
-    
-    q = 1.0 - resonance / 15
-    if q < 0.05
-        q = 0.05
-    
-    high = input - filter.low - q * filter.band
-    filter.band = filter.band + f * high
-    filter.low = filter.low + f * filter.band
-
-    if filter.band > 1 then filter.band = 1
-    elseif filter.band < -1 then filter.band = -1
-
-    if filter.low > 1 then filter.low = 1
-    elseif filter.low < -1 then filter.low = -1
-
-    if lp then output = output + filter.low
-    if bp then output = output + filter.band
-    if hp then output = output + high
-
-    return output * 0.8 + input * 0.2
-
-stepOscillators = ()->
-    clock = getClock!
-    dt_clock = clock / SAMPLE_RATE
-
-    for i = 1, 3
-        state = channels[i]
-        { :test } = getControl i
-
-        state.prev_acc = state.acc
-        if test
-            state.noise_reg = 0xfffff
-            state.acc = 0
-        else
-            freq = getFrequency i
-            state.acc = (state.acc + freq * dt_clock) % 16777216
-    
-    for i = 1, 3
-        { :sync } = getControl i
-        if sync
-            mod_i = if i == 1 then 3 else i - 1
-            if channels[mod_i].acc < channels[mod_i].prev_acc
-                channels[mod_i].acc = 0
-
-getNoiseSample = (ch)->
-    state = channels[ch]
-    acc_i = math.floor(state.acc)
-    current_bit19 = bit.band(bit.rshift(acc_i, 19), 1)
-
-    if state.last_bit19 == 0 and current_bit19 == 1
-        reg = state.noise_reg
-        bit22 = bit.band(bit.rshift(reg, 22), 1)
-        bit17 = bit.band(bit.rshift(reg, 17), 1)
-        feedback = bit.bxor(bit22, bit17)
-
-        reg = bit.band(bit.lshift(reg, 1), 0x7fffff)
-        reg = bit.bor(reg, feedback)
-
-        state.noise_reg = reg
-    state.last_bit19 = current_bit19
-
-    r = state.noise_reg
-    out = 0
-    out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 22), 1), 7))
-    out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 20), 1), 6))
-    out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 16), 1), 5))
-    out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 13), 1), 4))
-    out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 11), 1), 3))
-    out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 7), 1), 2))
-    out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 4), 1), 1))
-    bit.bor(out, bit.band(bit.rshift(r, 2), 1))
-
-getSample = (ch)->
-    state = channels[ch]
-    mod_i = if ch == 1 then 3 else ch - 1
-    { :ring, :test, :tri, :saw, :pulse, :noise } = getControl ch
-
-    if test then return 0
-
-    sample_raw = 0xff
-    any_wave = false
-    acc_i = math.floor(state.acc)
-
-    if tri
-        raw_tri_acc = acc_i
-        mod_acc = channels[mod_i].acc
-
-        if ring
-            car_msb = bit.band(bit.rshift(acc_i, 23), 1)
-            mod_msb = bit.band(bit.rshift(mod_acc, 23), 1)
-            ring_msb = bit.bxor(car_msb, mod_msb)
-
-            raw_tri_acc = bit.bor(
-                bit.band(acc_i, 0x7fffff),
-                bit.lshift(ring_msb, 23)
-            )
-
-        msb = bit.band(bit.rshift(raw_tri_acc, 23), 1)
-        v = bit.band(bit.rshift(raw_tri_acc, 16), 0x7f)
-
-        if msb == 1 then v = 0x7f - v
-        sample_raw = bit.band(sample_raw, v * 2)
-        any_wave = true
-    if saw
-        v = bit.band(bit.rshift(acc_i, 16), 0xff)
-        sample_raw = bit.band(sample_raw, v)
-        any_wave = true
-    if pulse
-        pw = getPulseWidth ch
-        acc12 = bit.band(bit.rshift(acc_i, 12), 0xfff)
-        v = (acc12 < pw) and 0xff or 0x00
-        sample_raw = bit.band(sample_raw, v)
-        any_wave = true
-    if noise
-        v = getNoiseSample ch
-        sample_raw = bit.band(sample_raw, v)
-        any_wave = true
-    
-    if not any_wave then return 0
-
-    sample = sample_raw / 127.5 - 1
-    sample * state.env_level / 0xff ?? 0
-
-lovesid.update = ()=>
-    self.source\play()
-
-    while self.source\getFreeBufferCount! > 0
-        sound_data = love.sound.newSoundData(buffer_size, SAMPLE_RATE, 16, 1)
-
-        filter_apply = getFilterApply!
-        filter_pass = getFilterPass!
-        res = getFilterResonance!
-        main_vol = getVolume! / 15
-
-        for i = 0, buffer_size - 1
-            for ch = 1, 3 do updateEnvelope ch
-            stepOscillators!
-
-            through_filter = unfiltered = 0
-            for ch = 1, 3
-                sample = getSample(ch) / 3
-                if filter_apply[i]
-                    through_filter += sample
+        @registers = {
+            <index>: ()-> 0
+            <newindex>: (k, v)=>
+                rawset @, k, bit.band(v, 0xff) if 1 <= k <= 25
+        }
+        setmetatable @, {
+            __index: (k)=>
+                if type(k) == "number"
+                    @registers[k]
                 else
-                    unfiltered += sample
-            
-            output = unfiltered + processFilter(through_filter, filter_pass.low_pass, filter_pass.band_pass, filter_pass.high_pass, res)
-            output *= main_vol
-            sound_data\setSample(i, math.max(-1, math.min(1, output)))
-        
-        self.source\queue(sound_data)
+                    Sid[k]
+            __newindex: (k, v)=>
+                if type(k) == "number"
+                    @registers[k] = v
+                else
+                    rawset @, k, v
+        }
+        channels[@] = for i = 1, 3
+            { acc: 0.0, prev_acc: 0.0, env_level: 0, env_state: ENV_STATE.IDLE, noise_reg: 0xfffff, last_bit19: 0 }
+        filters[@] = { low: 0, band: 0 }
 
-export default lovesid
+        @source = love.audio.newQueueableSource SAMPLE_RATE, 16, 1, @buffer_count
+
+    getVolume: ()=>
+        byte = @registers[25]
+        bit.band(byte, 0xf)
+    
+    getClock: ()=> @is_ntsc and CLOCK.NTSC or CLOCK.PAL
+    
+    getChannelOffset: (ch)=> (ch - 1) * 7 + 1
+    
+    getControl: (ch)=>
+        byte = @registers[@getChannelOffset(ch) + 4]
+        {
+            gate:  bit.band(byte, 0x01) != 0
+            sync:  bit.band(byte, 0x02) != 0
+            ring:  bit.band(byte, 0x04) != 0
+            test:  bit.band(byte, 0x08) != 0
+            tri:   bit.band(byte, 0x10) != 0
+            saw:   bit.band(byte, 0x20) != 0
+            pulse: bit.band(byte, 0x40) != 0
+            noise: bit.band(byte, 0x80) != 0
+        }
+    
+    getADSR: (ch)=>
+        offset = @getChannelOffset(ch) + 5
+        AD, SR = @registers[offset], @registers[offset + 1]
+        {
+            a: bit.band(bit.rshift(AD, 4), 0xf)
+            d: bit.band(AD, 0xf)
+            s: bit.band(bit.rshift(SR, 4), 0xf)
+            r: bit.band(SR, 0xf)
+        }
+    
+    getFrequencyWord: (ch)=>
+        offset = @getChannelOffset(ch)
+        lo, hi = @registers[offset], @registers[offset + 1]
+        bit.bor(bit.lshift(hi, 8) , lo)
+
+    freqWordToHz: (word)=> word * @getClock! / 16777216
+
+    getPulseWidth: (ch)=>
+        offset = @getChannelOffset(ch) + 2
+        lo, hi = @registers[offset], bit.band(@registers[offset + 1], 0xf)
+        bit.bor(bit.lshift(hi, 8), lo) ?? 0
+    
+    getFilterCutoff: ()=>
+        local lo, hi = bit.band(@registers[22], 0x7), @registers[23]
+        bit.bor(lo, bit.lshift(hi, 3))
+    
+    getFilterResonance: ()=>
+        byte = @registers[24]
+        bit.band(bit.rshift(byte, 4), 0xf)
+
+    getFilterApply: ()=>
+        byte = @registers[24]
+        {
+            bit.band(byte, 0x1) != 0
+            bit.band(byte, 0x2) != 0
+            bit.band(byte, 0x4) != 0
+        }
+    
+    getFilterPass: ()=>
+        byte = @registers[25]
+        {
+            low_pass: bit.band(byte, 0x10) != 0
+            band_pass: bit.band(byte, 0x20) != 0
+            high_pass: bit.band(byte, 0x40) != 0
+        }
+
+    getChannel3Off: ()=>
+        local byte = @registers[25]
+        bit.band(byte, 0x80) == 0x80
+
+    updateEnvelope: (ch)=>
+        state = channels[@][ch]
+        { :gate } = @getControl ch
+        { :a, :d, :s, :r } = @getADSR ch
+        sustain_level = s * 17
+
+        if gate
+            if state.env_state == ENV_STATE.IDLE or state.env_state == ENV_STATE.RELEASE
+                state.env_state = ENV_STATE.ATTACK
+        else
+            state.env_state = ENV_STATE.RELEASE
+
+        if state.env_state == ENV_STATE.ATTACK
+            duration = ADSR_LOOKUP.ATTACK[a + 1]
+            state.env_level = state.env_level + 255 / duration * SAMPLE_DT
+            if state.env_level >= 255
+                state.env_level = 255
+                state.env_state = ENV_STATE.DECAY
+        elseif state.env_state == ENV_STATE.DECAY
+            duration = ADSR_LOOKUP.DECAY[d + 1]
+            state.env_level = state.env_level - 255 / duration * SAMPLE_DT
+            if state.env_level <= sustain_level
+                state.env_level = sustain_level
+                state.env_state = ENV_STATE.SUSTAIN
+        elseif state.env_state == ENV_STATE.SUSTAIN
+            state.env_level = sustain_level
+        elseif state.env_state == ENV_STATE.RELEASE
+            duration = ADSR_LOOKUP.RELEASE[r + 1]
+            state.env_level = state.env_level - 255 / duration * SAMPLE_DT
+            if state.env_level <= 0
+                state.env_level = 0
+                state.env_state = ENV_STATE.IDLE
+
+    processFilter: (input, lp, bp, hp, resonance)=>
+        output = 0
+
+        cutoff = @getFilterCutoff!
+
+        f = cutoff / 2047 * 0.7
+        if f > 0.85
+            f = 0.85
+
+        q = 1.0 - resonance / 15
+        if q < 0.05
+            q = 0.05
+
+        high = input - filters[@].low - q * filters[@].band
+        filters[@].band = filters[@].band + f * high
+        filters[@].low = filters[@].low + f * filters[@].band
+
+        if filters[@].band > 1 then filters[@].band = 1
+        elseif filters[@].band < -1 then filters[@].band = -1
+
+        if filters[@].low > 1 then filters[@].low = 1
+        elseif filters[@].low < -1 then filters[@].low = -1
+
+        if lp then output = output + filters[@].low
+        if bp then output = output + filters[@].band
+        if hp then output = output + high
+
+        return output * 0.8 + input * 0.2
+    
+    stepOscillators: ()=>
+        clock = @getClock!
+        dt_clock = clock / SAMPLE_RATE
+
+        for i = 1, 3
+            state = channels[@][i]
+            { :test } = @getControl i
+
+            state.prev_acc = state.acc
+            if test
+                state.noise_reg = 0xfffff
+                state.acc = 0
+            else
+                freq = @getFrequencyWord i
+                state.acc = (state.acc + freq * dt_clock) % 16777216
+
+        for i = 1, 3
+            { :sync } = @getControl i
+            if sync
+                mod_i = if i == 1 then 3 else i - 1
+                if channels[@][mod_i].acc < channels[@][mod_i].prev_acc
+                    channels[@][mod_i].acc = 0
+    
+    getNoiseSample: (ch)=>
+        state = channels[@][ch]
+        acc_i = math.floor(state.acc)
+        current_bit19 = bit.band(bit.rshift(acc_i, 19), 1)
+
+        if state.last_bit19 == 0 and current_bit19 == 1
+            reg = state.noise_reg
+            bit22 = bit.band(bit.rshift(reg, 22), 1)
+            bit17 = bit.band(bit.rshift(reg, 17), 1)
+            feedback = bit.bxor(bit22, bit17)
+
+            reg = bit.band(bit.lshift(reg, 1), 0x7fffff)
+            reg = bit.bor(reg, feedback)
+
+            state.noise_reg = reg
+        state.last_bit19 = current_bit19
+
+        r = state.noise_reg
+        out = 0
+        out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 22), 1), 7))
+        out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 20), 1), 6))
+        out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 16), 1), 5))
+        out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 13), 1), 4))
+        out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 11), 1), 3))
+        out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 7), 1), 2))
+        out = bit.bor(out, bit.lshift(bit.band(bit.rshift(r, 4), 1), 1))
+        bit.bor(out, bit.band(bit.rshift(r, 2), 1))
+    
+    getSample: (ch)=>
+        state = channels[@][ch]
+        mod_i = if ch == 1 then 3 else ch - 1
+        { :ring, :test, :tri, :saw, :pulse, :noise } = @getControl ch
+
+        if test then return 0
+
+        sample_raw = 0xff
+        any_wave = false
+        acc_i = math.floor(state.acc)
+
+        if tri
+            raw_tri_acc = acc_i
+            mod_acc = channels[@][mod_i].acc
+
+            if ring
+                car_msb = bit.band(bit.rshift(acc_i, 23), 1)
+                mod_msb = bit.band(bit.rshift(mod_acc, 23), 1)
+                ring_msb = bit.bxor(car_msb, mod_msb)
+
+                raw_tri_acc = bit.bor(
+                    bit.band(acc_i, 0x7fffff),
+                    bit.lshift(ring_msb, 23)
+                )
+
+            msb = bit.band(bit.rshift(raw_tri_acc, 23), 1)
+            v = bit.band(bit.rshift(raw_tri_acc, 16), 0x7f)
+
+            if msb == 1 then v = 0x7f - v
+            sample_raw = bit.band(sample_raw, v * 2)
+            any_wave = true
+        if saw
+            v = bit.band(bit.rshift(acc_i, 16), 0xff)
+            sample_raw = bit.band(sample_raw, v)
+            any_wave = true
+        if pulse
+            pw = @getPulseWidth ch
+            acc12 = bit.band(bit.rshift(acc_i, 12), 0xfff)
+            v = (acc12 < pw) and 0xff or 0x00
+            sample_raw = bit.band(sample_raw, v)
+            any_wave = true
+        if noise
+            v = @getNoiseSample ch
+            sample_raw = bit.band(sample_raw, v)
+            any_wave = true
+
+        if not any_wave then return 0
+
+        sample = sample_raw / 127.5 - 1
+        sample * state.env_level / 0xff ?? 0
+
+    update: ()=>
+        @source\play()
+
+        while @source\getFreeBufferCount! > 0
+            sound_data = love.sound.newSoundData(@buffer_size, SAMPLE_RATE, 16, 1)
+
+            filter_apply = @getFilterApply!
+            filter_pass = @getFilterPass!
+            res = @getFilterResonance!
+            main_vol = @getVolume! / 15
+
+            for i = 0, @buffer_size - 1
+                for ch = 1, 3 do @updateEnvelope ch
+                @stepOscillators!
+
+                through_filter = unfiltered = 0
+                for ch = 1, 3
+                    sample = @getSample(ch) / 3
+                    if filter_apply[ch]
+                        through_filter += sample
+                    else
+                        unfiltered += sample
+
+                output = unfiltered + @processFilter(through_filter, filter_pass.low_pass, filter_pass.band_pass, filter_pass.high_pass, res)
+                output *= main_vol
+                sound_data\setSample(i, math.max(-1, math.min(1, output)))
+
+            @source\queue(sound_data)
