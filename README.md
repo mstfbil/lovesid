@@ -4,7 +4,7 @@
 
 ## Usage
 
-Clone the repo or copy the raw file `lovesid.lua` into your project and require it. To generate sound, all you have to do is modify the registers and call update. The library handles producing and playing the sound via `love.audio`.
+Clone the repo or copy the raw file `lovesid.lua` into your project and require it. To generate sound, all you have to do is modify the registers and call play on the mixer. The library handles producing and playing the sound via `love.audio` and `love.sound`.
 
 Should you use [YueScript](https://github.com/IppClub/YueScript) in your project, you can copy the raw file `lovesid.yue` and import it.
 
@@ -17,20 +17,26 @@ Below is an example usage with Lua:
 
 -- this file will play a simple triangle wave on channel 1
 
-local Sid = require("lovesid")
-local sid = Sid()
+local lovesid = require("lovesid")
+local Sid = lovesid.Sid
+local SidMixer = lovesid.SidMixer
+
+local sid = Sid() -- make a new Sid instance
+
+local mixer = SidMixer()
+mixer:addSid(sid) -- add the instance to the mixer
 
 -- initialize the registers
-sid[1] = 0x00 -- ch1 freq lo
-sid[2] = 0x40 -- ch1 freq hi
-sid[5] = 0x11 -- ch1 triangle wave, gate open
-sid[6] = 0xa0 -- ch1 attack and decay
-sid[7] = 0xf0 -- ch1 sustain and release
+sid[1] = 0x00  -- ch1 freq lo
+sid[2] = 0x40  -- ch1 freq hi
+sid[5] = 0x11  -- ch1 triangle wave, gate open
+sid[6] = 0xa0  -- ch1 attack and decay
+sid[7] = 0xf0  -- ch1 sustain and release
 
 sid[25] = 0x0f -- global volume high, no filter
 
 function love.update()
-    sid:update()
+    mixer:play() -- call continuously to make sound
 end
 ```
 
@@ -41,8 +47,12 @@ You can also use the library with YueScript:
 
 -- this file will play a simple triangle wave on channel 1
 
-import "lovesid" as Sid
-sid = Sid!
+import Sid, SidMixer from "lovesid"
+
+sid = Sid! -- make a new Sid instance
+
+mixer = SidMixer!
+mixer\addSid sid -- add the instance to the mixer
 
 -- initialize the registers
 sid[1] = 0x00 -- ch1 freq lo
@@ -54,7 +64,7 @@ sid[7] = 0xf0 -- ch1 sustain and release
 sid[25] = 0x0f -- global volume high, no filter
 
 love.update = ()->
-    sid\update!
+    mixer\play! -- call continuously to make sound
 ```
 
 ### Address Compatibility
