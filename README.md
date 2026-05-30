@@ -76,8 +76,3 @@ In the Commodore 64, the SID chip's registers start at address `$d400`, but in l
 ### Instancing
 
 You may define as many instances of ``Sid`` as you like, which are fully seperated. This may be useful for stereo SID tracks.
-
-## Development
-
-- Currently the library is in a shift from plain Lua to YueScript and instancing architecture, so breaking API changes will happen.
-- ADSR and filters have inaccuracies for the time being
